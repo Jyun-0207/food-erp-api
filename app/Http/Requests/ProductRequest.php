@@ -21,7 +21,7 @@ class ProductRequest extends FormRequest
             'categoryId' => ['nullable', 'string'],
             'purchaseAccountId' => ['nullable', 'string'],
             'salesAccountId' => ['nullable', 'string'],
-            'sku' => ['required', 'min:1', 'max:50'],
+            'sku' => ['nullable', 'max:50'],
             'stock' => ['nullable', 'integer', 'min:0'],
             'minStock' => ['nullable', 'integer', 'min:0'],
             'unit' => ['required', 'min:1', 'max:20'],

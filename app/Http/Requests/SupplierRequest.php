@@ -16,8 +16,8 @@ class SupplierRequest extends FormRequest
         return [
             'name' => ['required', 'min:1', 'max:200'],
             'contactPerson' => ['nullable', 'max:100'],
-            'email' => ['required', 'email'],
-            'phone' => ['required', 'min:1', 'max:20'],
+            'email' => ['nullable', 'email'],
+            'phone' => ['nullable', 'max:20'],
             'address' => ['nullable', 'max:500'],
             'taxId' => ['nullable', 'max:20'],
             'paymentTerms' => ['nullable', 'max:100'],

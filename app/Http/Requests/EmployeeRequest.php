@@ -21,7 +21,7 @@ class EmployeeRequest extends FormRequest
             'departmentId' => ['nullable', 'string'],
             'departmentName' => ['nullable', 'max:200'],
             'position' => ['nullable', 'max:100'],
-            'hireDate' => ['required', 'date'],
+            'hireDate' => ['nullable', 'date_format:Y-m-d'],
             'resignDate' => ['nullable', 'date'],
             'pinCode' => ['nullable', 'min:4', 'max:10'],
             'status' => ['nullable', 'in:active,on_leave,resigned'],

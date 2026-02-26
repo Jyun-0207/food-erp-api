@@ -15,8 +15,8 @@ class CustomerRequest extends FormRequest
     {
         return [
             'name' => ['required', 'min:1', 'max:200'],
-            'email' => ['required', 'email'],
-            'phone' => ['required', 'min:1', 'max:20'],
+            'email' => ['nullable', 'email'],
+            'phone' => ['nullable', 'max:20'],
             'companyName' => ['nullable', 'max:200'],
             'taxId' => ['nullable', 'max:20'],
             'creditLimit' => ['nullable', 'numeric', 'min:0'],
