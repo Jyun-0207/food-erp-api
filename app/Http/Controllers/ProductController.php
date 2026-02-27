@@ -31,7 +31,7 @@ class ProductController extends Controller
             ->paginate($request->input('per_page', 50));
 
         // Strip costPrice for unauthenticated users
-        if (!$request->user()) {
+        if (!auth()->guard('sanctum')->user()) {
             $products->getCollection()->transform(function ($product) {
                 $product->makeHidden('costPrice');
                 return $product;
@@ -53,7 +53,7 @@ class ProductController extends Controller
     {
         $product = Product::with(['category', 'batches'])->findOrFail($id);
 
-        if (!$request->user()) {
+        if (!auth()->guard('sanctum')->user()) {
             $product->makeHidden('costPrice');
         }
 
