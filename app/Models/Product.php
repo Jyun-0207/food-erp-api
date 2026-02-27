@@ -33,6 +33,7 @@ class Product extends BaseModel
         'shelfLife',
         'shelfLifeUnit',
         'isActive',
+        'units',
     ];
 
     protected function casts(): array
@@ -50,6 +51,7 @@ class Product extends BaseModel
             'isActive' => 'boolean',
             'stock' => 'integer',
             'minStock' => 'integer',
+            'units' => 'array',
         ];
     }
 

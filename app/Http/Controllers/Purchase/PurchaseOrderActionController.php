@@ -56,12 +56,15 @@ class PurchaseOrderActionController extends Controller
                         throw new \Exception("產品 {$entry['productName']} 不存在");
                     }
 
+                    $conversionFactor = isset($entry['unitConversionFactor']) ? (int) $entry['unitConversionFactor'] : 1;
+                    $actualQty = $entry['quantity'] * $conversionFactor;
+
                     $beforeStock = $product->stock;
 
                     // 2. Atomic stock increment
                     DB::table('products')
                         ->where('id', $entry['productId'])
-                        ->increment('stock', $entry['quantity']);
+                        ->increment('stock', $actualQty);
 
                     // 3. Create product batch (if requires batch)
                     if (!empty($entry['requiresBatch'])) {
@@ -72,8 +75,8 @@ class PurchaseOrderActionController extends Controller
                             'manufacturingDate' => !empty($entry['manufacturingDate']) ? $entry['manufacturingDate'] : null,
                             'expirationDate' => !empty($entry['expirationDate']) ? $entry['expirationDate'] : null,
                             'receivedDate' => $today,
-                            'initialQuantity' => $entry['quantity'],
-                            'currentQuantity' => $entry['quantity'],
+                            'initialQuantity' => $actualQty,
+                            'currentQuantity' => $actualQty,
                             'reservedQuantity' => 0,
                             'supplierId' => $order->supplierId,
                             'supplierName' => $order->supplierName,
@@ -93,9 +96,9 @@ class PurchaseOrderActionController extends Controller
                         'productId' => $entry['productId'],
                         'productName' => $entry['productName'],
                         'type' => 'in',
-                        'quantity' => $entry['quantity'],
+                        'quantity' => $actualQty,
                         'beforeStock' => $beforeStock,
-                        'afterStock' => $beforeStock + $entry['quantity'],
+                        'afterStock' => $beforeStock + $actualQty,
                         'reason' => $reason,
                         'reference' => $id,
                         'createdBy' => $userName,
@@ -248,15 +251,18 @@ class PurchaseOrderActionController extends Controller
                     $product = Product::find($item['productId']);
                     if (!$product) continue;
 
-                    if ($product->stock < $item['quantity']) {
-                        throw new \Exception("CONFLICT:產品 {$item['productName']} 庫存不足，無法退貨（庫存 {$product->stock}，需退 {$item['quantity']}）");
+                    $conversionFactor = isset($item['unitConversionFactor']) ? (int) $item['unitConversionFactor'] : 1;
+                    $actualQty = $item['quantity'] * $conversionFactor;
+
+                    if ($product->stock < $actualQty) {
+                        throw new \Exception("CONFLICT:產品 {$item['productName']} 庫存不足，無法退貨（庫存 {$product->stock}，需退 {$actualQty}）");
                     }
 
                     $beforeStock = $product->stock;
 
                     DB::table('products')
                         ->where('id', $item['productId'])
-                        ->decrement('stock', $item['quantity']);
+                        ->decrement('stock', $actualQty);
 
                     // Clean up batch records
                     $relatedBatches = ProductBatch::where('purchaseOrderId', $id)
@@ -264,7 +270,7 @@ class PurchaseOrderActionController extends Controller
                         ->orderBy('createdAt', 'desc')
                         ->get();
 
-                    $remainingToReturn = $item['quantity'];
+                    $remainingToReturn = $actualQty;
                     foreach ($relatedBatches as $batch) {
                         if ($remainingToReturn <= 0) break;
                         if ($batch->currentQuantity <= $remainingToReturn) {
@@ -283,9 +289,9 @@ class PurchaseOrderActionController extends Controller
                         'productId' => $item['productId'],
                         'productName' => $item['productName'],
                         'type' => 'out',
-                        'quantity' => $item['quantity'],
+                        'quantity' => $actualQty,
                         'beforeStock' => $beforeStock,
-                        'afterStock' => $beforeStock - $item['quantity'],
+                        'afterStock' => $beforeStock - $actualQty,
                         'reason' => "採購退貨 - {$order->orderNumber} - {$returnReason}",
                         'reference' => $id,
                         'createdBy' => $userName,

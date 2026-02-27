@@ -23,6 +23,8 @@ class PurchaseOrderRequest extends FormRequest
             'items.*.productName' => ['required_with:items', 'string'],
             'items.*.quantity' => ['required_with:items', 'integer', 'min:1'],
             'items.*.unitPrice' => ['required_with:items', 'numeric', 'min:0'],
+            'items.*.unit' => ['nullable', 'string', 'max:50'],
+            'items.*.unitConversionFactor' => ['nullable', 'integer', 'min:1'],
             'totalAmount' => [$required, 'numeric', 'min:0'],
             'expectedDate' => ['nullable', 'date'],
             'notes' => ['nullable', 'max:2000'],

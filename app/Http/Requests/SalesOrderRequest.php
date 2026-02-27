@@ -25,6 +25,8 @@ class SalesOrderRequest extends FormRequest
             'items.*.unitPrice' => ['required_with:items', 'numeric', 'min:0'],
             'items.*.totalPrice' => ['nullable', 'numeric', 'min:0'],
             'items.*.quantity' => ['required_with:items', 'integer', 'min:1'],
+            'items.*.unit' => ['nullable', 'string', 'max:50'],
+            'items.*.unitConversionFactor' => ['nullable', 'integer', 'min:1'],
             'subtotal' => [$required, 'numeric', 'min:0'],
             'tax' => [$required, 'numeric', 'min:0'],
             'shipping' => [$required, 'numeric', 'min:0'],

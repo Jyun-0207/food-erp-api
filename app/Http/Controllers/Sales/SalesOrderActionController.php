@@ -49,8 +49,10 @@ class SalesOrderActionController extends Controller
                     if (!$product) {
                         throw new \Exception("產品 {$item['productName']} 不存在");
                     }
-                    if ($product->stock < $item['quantity']) {
-                        throw new \Exception("產品 {$item['productName']} 庫存不足：需要 {$item['quantity']}，庫存僅 {$product->stock}");
+                    $conversionFactor = isset($item['unitConversionFactor']) ? (int) $item['unitConversionFactor'] : 1;
+                    $actualQty = $item['quantity'] * $conversionFactor;
+                    if ($product->stock < $actualQty) {
+                        throw new \Exception("產品 {$item['productName']} 庫存不足：需要 {$actualQty}，庫存僅 {$product->stock}");
                     }
 
                     $selection = collect($batchSelections)->firstWhere('productId', $item['productId']);
@@ -99,12 +101,15 @@ class SalesOrderActionController extends Controller
                     $product = $productsMap->get($item['productId']);
                     if (!$product) continue;
 
+                    $conversionFactor = isset($item['unitConversionFactor']) ? (int) $item['unitConversionFactor'] : 1;
+                    $actualQty = $item['quantity'] * $conversionFactor;
+
                     $beforeStock = $product->stock;
 
                     // 3. Atomic stock decrement
                     DB::table('products')
                         ->where('id', $item['productId'])
-                        ->decrement('stock', $item['quantity']);
+                        ->decrement('stock', $actualQty);
 
                     // 4. Deduct from batches
                     $selection = collect($batchSelections)->firstWhere('productId', $item['productId']);
@@ -112,16 +117,17 @@ class SalesOrderActionController extends Controller
                     if (!empty($selection['requiresBatch'])) {
                         foreach ($selection['selectedBatches'] as $batchSel) {
                             if (($batchSel['quantity'] ?? 0) <= 0) continue;
+                            $batchActualQty = $batchSel['quantity'] * $conversionFactor;
                             $batch = ProductBatch::find($batchSel['batchId']);
                             DB::table('product_batches')
                                 ->where('id', $batchSel['batchId'])
-                                ->decrement('currentQuantity', $batchSel['quantity']);
-                            $usedBatches[] = ($batch->batchNumber ?? $batchSel['batchId']) . "({$batchSel['quantity']})";
+                                ->decrement('currentQuantity', $batchActualQty);
+                            $usedBatches[] = ($batch->batchNumber ?? $batchSel['batchId']) . "({$batchActualQty})";
                         }
                     }
 
                     // Calculate cost
-                    $itemCost = bcmul((string) ($product->costPrice ?? 0), (string) $item['quantity'], 2);
+                    $itemCost = bcmul((string) ($product->costPrice ?? 0), (string) $actualQty, 2);
                     $totalCost = bcadd($totalCost, $itemCost, 2);
 
                     // 5. Create inventory movement
@@ -130,9 +136,9 @@ class SalesOrderActionController extends Controller
                         'productId' => $item['productId'],
                         'productName' => $item['productName'],
                         'type' => 'out',
-                        'quantity' => $item['quantity'],
+                        'quantity' => $actualQty,
                         'beforeStock' => $beforeStock,
-                        'afterStock' => $beforeStock - $item['quantity'],
+                        'afterStock' => $beforeStock - $actualQty,
                         'reason' => "銷售出貨 - 訂單 {$order->orderNumber}{$batchInfo}",
                         'reference' => $id,
                         'createdBy' => $userName,
@@ -397,18 +403,21 @@ class SalesOrderActionController extends Controller
                     $product = $productsMap->get($item['productId']);
                     if (!$product) continue;
 
+                    $conversionFactor = isset($item['unitConversionFactor']) ? (int) $item['unitConversionFactor'] : 1;
+                    $actualQty = $item['quantity'] * $conversionFactor;
+
                     $beforeStock = $product->stock;
 
                     // Restore stock
                     DB::table('products')
                         ->where('id', $item['productId'])
-                        ->increment('stock', $item['quantity']);
+                        ->increment('stock', $actualQty);
 
                     // Calculate cost
-                    $itemCost = bcmul((string) ($product->costPrice ?? 0), (string) $item['quantity'], 2);
+                    $itemCost = bcmul((string) ($product->costPrice ?? 0), (string) $actualQty, 2);
                     $totalCost = bcadd($totalCost, $itemCost, 2);
 
-                    // Restore batch quantities
+                    // Restore batch quantities (movements already stored actual qty)
                     $movements = InventoryMovement::where('reference', $id)
                         ->where('productId', $item['productId'])
                         ->where('type', 'out')
@@ -439,9 +448,9 @@ class SalesOrderActionController extends Controller
                         'productId' => $item['productId'],
                         'productName' => $item['productName'],
                         'type' => 'in',
-                        'quantity' => $item['quantity'],
+                        'quantity' => $actualQty,
                         'beforeStock' => $beforeStock,
-                        'afterStock' => $beforeStock + $item['quantity'],
+                        'afterStock' => $beforeStock + $actualQty,
                         'reason' => "銷售退貨 - {$returnReason}",
                         'reference' => $id,
                         'createdBy' => $userName,
