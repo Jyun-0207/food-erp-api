@@ -33,8 +33,8 @@ class SalesOrderActionController extends Controller
                 // 1. Verify order status
                 $order = SalesOrder::with('customer')->findOrFail($id);
 
-                if ($order->status !== 'processing') {
-                    throw new \Exception("訂單狀態不正確，目前為 {$order->status}，需要 processing");
+                if ($order->status !== 'confirmed' && $order->status !== 'processing') {
+                    throw new \Exception("訂單狀態不正確，目前為 {$order->status}，需要 confirmed 或 processing");
                 }
 
                 $items = $order->items;
