@@ -13,20 +13,22 @@ class SalesOrderRequest extends FormRequest
 
     public function rules(): array
     {
+        $required = $this->isMethod('post') ? 'required' : 'sometimes';
+
         return [
-            'customerId' => ['required', 'string'],
-            'customerName' => ['required', 'max:200'],
+            'customerId' => [$required, 'string'],
+            'customerName' => [$required, 'max:200'],
             'status' => ['nullable', 'string'],
-            'items' => ['required', 'array', 'min:1'],
-            'items.*.productId' => ['required', 'string'],
-            'items.*.productName' => ['required', 'string'],
-            'items.*.unitPrice' => ['required', 'numeric', 'min:0'],
+            'items' => [$required, 'array', 'min:1'],
+            'items.*.productId' => ['required_with:items', 'string'],
+            'items.*.productName' => ['required_with:items', 'string'],
+            'items.*.unitPrice' => ['required_with:items', 'numeric', 'min:0'],
             'items.*.totalPrice' => ['nullable', 'numeric', 'min:0'],
-            'items.*.quantity' => ['required', 'integer', 'min:1'],
-            'subtotal' => ['required', 'numeric', 'min:0'],
-            'tax' => ['required', 'numeric', 'min:0'],
-            'shipping' => ['required', 'numeric', 'min:0'],
-            'totalAmount' => ['required', 'numeric', 'min:0'],
+            'items.*.quantity' => ['required_with:items', 'integer', 'min:1'],
+            'subtotal' => [$required, 'numeric', 'min:0'],
+            'tax' => [$required, 'numeric', 'min:0'],
+            'shipping' => [$required, 'numeric', 'min:0'],
+            'totalAmount' => [$required, 'numeric', 'min:0'],
             'shippingAddress' => ['nullable', 'array'],
             'paymentMethod' => ['nullable', 'string'],
             'paymentStatus' => ['nullable', 'string'],

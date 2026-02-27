@@ -4,10 +4,16 @@ namespace App\Http\Controllers\Accounting;
 
 use App\Http\Controllers\Controller;
 use App\Models\AccountsPayable;
+use App\Services\AccountingService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class AccountsPayableController extends Controller
 {
+    public function __construct(
+        protected AccountingService $accountingService,
+    ) {}
+
     public function index(Request $request)
     {
         $query = AccountsPayable::with('supplier');
@@ -76,9 +82,63 @@ class AccountsPayableController extends Controller
             'status' => ['nullable', 'string'],
         ]);
 
-        $payable->fill($data)->save();
+        $previousPaidAmount = (float) $payable->paidAmount;
+        $newPaidAmount = isset($data['paidAmount']) ? (float) $data['paidAmount'] : $previousPaidAmount;
+        $newPayment = bcsub((string) $newPaidAmount, (string) $previousPaidAmount, 2);
 
-        return response()->json($payable);
+        DB::transaction(function () use ($payable, $data, $newPayment, $request) {
+            $payable->fill($data)->save();
+
+            // Generate payment journal entry when paidAmount increases
+            if (bccomp($newPayment, '0', 2) > 0) {
+                $cashAccount = $this->accountingService->findAccountByConditions([
+                    ['name' => '現金'], ['name' => '銀行'],
+                ]);
+                $payableAccount = $this->accountingService->findAccount('應付');
+
+                if ($cashAccount && $payableAccount) {
+                    $userName = $request->user()?->name ?? '系統';
+                    $description = "付款 - {$payable->supplierName}" .
+                        ($payable->orderNumber ? " - 採購單 {$payable->orderNumber}" : '');
+
+                    $voucherLines = [
+                        [
+                            'accountId' => $payableAccount->id,
+                            'accountCode' => $payableAccount->code,
+                            'accountName' => $payableAccount->name,
+                            'debit' => (float) $newPayment,
+                            'credit' => 0,
+                            'description' => $description,
+                        ],
+                        [
+                            'accountId' => $cashAccount->id,
+                            'accountCode' => $cashAccount->code,
+                            'accountName' => $cashAccount->name,
+                            'debit' => 0,
+                            'credit' => (float) $newPayment,
+                            'description' => $description,
+                        ],
+                    ];
+
+                    $voucherNumber = $this->accountingService->generateVoucherNumber('P');
+
+                    $this->accountingService->createVoucherAndJournal([
+                        'voucherNumber' => $voucherNumber,
+                        'voucherType' => 'payment',
+                        'voucherDate' => now(),
+                        'description' => $description,
+                        'reference' => $payable->orderNumber
+                            ? "PO-PAY-{$payable->orderNumber}"
+                            : "AP-PAY-{$payable->id}",
+                    ], $voucherLines, $userName);
+
+                    $this->accountingService->updateAccountBalance($payableAccount->id, (float) $newPayment, 'decrement');
+                    $this->accountingService->updateAccountBalance($cashAccount->id, (float) $newPayment, 'decrement');
+                }
+            }
+        });
+
+        return response()->json($payable->fresh());
     }
 
     public function destroy(string $id)

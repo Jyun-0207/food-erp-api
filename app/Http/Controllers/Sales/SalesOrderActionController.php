@@ -482,6 +482,40 @@ class SalesOrderActionController extends Controller
                     ];
                 }
 
+                // Reverse shipping fee
+                if (bccomp((string) $order->shipping, '0', 2) > 0) {
+                    $shippingAccount = $this->accountingService->findAccountByConditions([
+                        ['name' => '運費'], ['name' => '營業費用'],
+                    ]);
+                    if ($shippingAccount) {
+                        $voucherLines[] = [
+                            'accountId' => $shippingAccount->id,
+                            'accountCode' => $shippingAccount->code,
+                            'accountName' => $shippingAccount->name,
+                            'debit' => (float) $order->shipping,
+                            'credit' => 0,
+                            'description' => '退回運費',
+                        ];
+                    }
+                }
+
+                // Reverse tax
+                if (bccomp((string) $order->tax, '0', 2) > 0) {
+                    $taxAccount = $this->accountingService->findAccountByConditions([
+                        ['name' => '營業稅'], ['name' => '銷項稅'],
+                    ]);
+                    if ($taxAccount) {
+                        $voucherLines[] = [
+                            'accountId' => $taxAccount->id,
+                            'accountCode' => $taxAccount->code,
+                            'accountName' => $taxAccount->name,
+                            'debit' => (float) $order->tax,
+                            'credit' => 0,
+                            'description' => '退回銷項稅',
+                        ];
+                    }
+                }
+
                 $voucherLines[] = [
                     'accountId' => $receivableAccount->id,
                     'accountCode' => $receivableAccount->code,
@@ -490,34 +524,6 @@ class SalesOrderActionController extends Controller
                     'credit' => (float) $order->totalAmount,
                     'description' => "沖銷應收帳款 - {$order->customerName}",
                 ];
-
-                $totalDebit = array_reduce($voucherLines, fn($s, $l) => bcadd($s, (string) $l['debit'], 2), '0');
-                $totalCredit = array_reduce($voucherLines, fn($s, $l) => bcadd($s, (string) $l['credit'], 2), '0');
-
-                // Balance if needed
-                $diff = bcsub($totalDebit, $totalCredit, 2);
-                if (abs((float) $diff) > 0.01) {
-                    if (bccomp($diff, '0', 2) > 0) {
-                        $voucherLines[] = [
-                            'accountId' => $defaultRevenueAccount->id,
-                            'accountCode' => $defaultRevenueAccount->code ?? '',
-                            'accountName' => $defaultRevenueAccount->name,
-                            'debit' => 0,
-                            'credit' => (float) $diff,
-                            'description' => '退貨差額調整',
-                        ];
-                    } else {
-                        $absDiff = bcmul($diff, '-1', 2);
-                        $voucherLines[] = [
-                            'accountId' => $defaultRevenueAccount->id,
-                            'accountCode' => $defaultRevenueAccount->code ?? '',
-                            'accountName' => $defaultRevenueAccount->name,
-                            'debit' => (float) $absDiff,
-                            'credit' => 0,
-                            'description' => '退貨差額調整',
-                        ];
-                    }
-                }
 
                 $returnVoucherNumber = $this->accountingService->generateVoucherNumber('T');
 

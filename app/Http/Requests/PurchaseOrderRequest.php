@@ -13,15 +13,17 @@ class PurchaseOrderRequest extends FormRequest
 
     public function rules(): array
     {
+        $required = $this->isMethod('post') ? 'required' : 'sometimes';
+
         return [
-            'supplierId' => ['required', 'string'],
-            'supplierName' => ['required', 'max:200'],
-            'items' => ['required', 'array', 'min:1'],
-            'items.*.productId' => ['required', 'string'],
-            'items.*.productName' => ['required', 'string'],
-            'items.*.quantity' => ['required', 'integer', 'min:1'],
-            'items.*.unitPrice' => ['required', 'numeric', 'min:0'],
-            'totalAmount' => ['required', 'numeric', 'min:0'],
+            'supplierId' => [$required, 'string'],
+            'supplierName' => [$required, 'max:200'],
+            'items' => [$required, 'array', 'min:1'],
+            'items.*.productId' => ['required_with:items', 'string'],
+            'items.*.productName' => ['required_with:items', 'string'],
+            'items.*.quantity' => ['required_with:items', 'integer', 'min:1'],
+            'items.*.unitPrice' => ['required_with:items', 'numeric', 'min:0'],
+            'totalAmount' => [$required, 'numeric', 'min:0'],
             'expectedDate' => ['nullable', 'date'],
             'notes' => ['nullable', 'max:2000'],
         ];
