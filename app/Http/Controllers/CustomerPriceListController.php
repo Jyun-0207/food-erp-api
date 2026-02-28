@@ -17,23 +17,33 @@ class CustomerPriceListController extends Controller
 
     public function store(Request $request)
     {
-        $priceList = new CustomerPriceList();
-        $priceList->fill($request->only(['customerId', 'customerName', 'items']))->save();
+        $priceList = CustomerPriceList::updateOrCreate(
+            ['customerId' => $request->input('customerId')],
+            [
+                'customerName' => $request->input('customerName'),
+                'items' => $request->input('items'),
+            ]
+        );
 
         return response()->json($priceList, 201);
     }
 
     public function show(string $customerPriceList)
     {
-        $priceList = CustomerPriceList::where('customerId', $customerPriceList)->firstOrFail();
+        $priceList = CustomerPriceList::where('customerId', $customerPriceList)->first();
 
-        return response()->json($priceList);
+        return response()->json($priceList); // null if not found
     }
 
     public function update(Request $request, string $customerPriceList)
     {
-        $priceList = CustomerPriceList::findOrFail($customerPriceList);
-        $priceList->fill($request->only(['customerId', 'customerName', 'items']))->save();
+        $priceList = CustomerPriceList::updateOrCreate(
+            ['customerId' => $request->input('customerId', $customerPriceList)],
+            [
+                'customerName' => $request->input('customerName'),
+                'items' => $request->input('items'),
+            ]
+        );
 
         return response()->json($priceList);
     }

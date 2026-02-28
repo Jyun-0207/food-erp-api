@@ -207,7 +207,9 @@ class SalesOrderActionController extends Controller
                     // Add shipping fee entry
                     if (bccomp((string) $order->shipping, '0', 2) > 0) {
                         $shippingAccount = $this->accountingService->findAccountByConditions([
-                            ['name' => '運費'], ['name' => '營業費用'],
+                            ['name' => '運費收入'],
+                            ['name' => '運費', 'type' => 'revenue'],
+                            ['name' => '運費', 'type' => 'income'],
                         ]);
                         if ($shippingAccount) {
                             $voucherLines[] = [
@@ -287,7 +289,9 @@ class SalesOrderActionController extends Controller
 
                     if (bccomp((string) $order->shipping, '0', 2) > 0) {
                         $shippingAccount = $this->accountingService->findAccountByConditions([
-                            ['name' => '運費'], ['name' => '營業費用'],
+                            ['name' => '運費收入'],
+                            ['name' => '運費', 'type' => 'revenue'],
+                            ['name' => '運費', 'type' => 'income'],
                         ]);
                         if ($shippingAccount) {
                             $this->accountingService->updateAccountBalance($shippingAccount->id, (float) $order->shipping, 'increment');
@@ -494,7 +498,9 @@ class SalesOrderActionController extends Controller
                 // Reverse shipping fee
                 if (bccomp((string) $order->shipping, '0', 2) > 0) {
                     $shippingAccount = $this->accountingService->findAccountByConditions([
-                        ['name' => '運費'], ['name' => '營業費用'],
+                        ['name' => '運費收入'],
+                        ['name' => '運費', 'type' => 'revenue'],
+                        ['name' => '運費', 'type' => 'income'],
                     ]);
                     if ($shippingAccount) {
                         $voucherLines[] = [
@@ -553,7 +559,9 @@ class SalesOrderActionController extends Controller
                 // Reverse shipping
                 if (bccomp((string) $order->shipping, '0', 2) > 0) {
                     $shippingAccount = $this->accountingService->findAccountByConditions([
-                        ['name' => '運費'], ['name' => '營業費用'],
+                        ['name' => '運費收入'],
+                        ['name' => '運費', 'type' => 'revenue'],
+                        ['name' => '運費', 'type' => 'income'],
                     ]);
                     if ($shippingAccount) {
                         $this->accountingService->updateAccountBalance($shippingAccount->id, (float) $order->shipping, 'decrement');
