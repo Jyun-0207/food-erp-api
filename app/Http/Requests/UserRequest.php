@@ -15,7 +15,7 @@ class UserRequest extends FormRequest
     {
         return [
             'name' => ['required', 'min:2', 'max:50'],
-            'email' => ['required', 'email', 'unique:users,email'],
+            'email' => ['nullable', 'email', 'unique:users,email'],
             'password' => ['required', 'min:6', 'max:100'],
             'role' => ['required', 'in:admin,manager,staff,customer'],
             'phone' => ['nullable', 'max:20'],
@@ -29,7 +29,6 @@ class UserRequest extends FormRequest
             'name.required' => '姓名為必填欄位',
             'name.min' => '姓名至少需要 2 個字元',
             'name.max' => '姓名不能超過 50 個字元',
-            'email.required' => 'Email 為必填欄位',
             'email.email' => '請輸入有效的 Email 格式',
             'email.unique' => '此 Email 已被使用',
             'password.required' => '密碼為必填欄位',

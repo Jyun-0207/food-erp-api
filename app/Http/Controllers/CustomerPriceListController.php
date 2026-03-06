@@ -9,7 +9,7 @@ class CustomerPriceListController extends Controller
 {
     public function index(Request $request)
     {
-        $priceLists = CustomerPriceList::orderBy('createdAt', 'desc')
+        $priceLists = CustomerPriceList::orderBy('updatedAt', 'desc')
             ->paginate($request->input('per_page', 50));
 
         return response()->json($priceLists);

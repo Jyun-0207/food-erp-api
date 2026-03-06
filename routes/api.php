@@ -28,6 +28,7 @@ use App\Http\Controllers\Accounting\AccountsPayableController;
 use App\Http\Controllers\Attendance\AttendanceRecordController;
 use App\Http\Controllers\Attendance\ShiftTypeController;
 use App\Http\Controllers\Attendance\LeaveTypeController;
+use App\Http\Controllers\Attendance\HolidayController;
 use App\Http\Controllers\Attendance\LeaveApplicationController;
 use App\Http\Controllers\Attendance\AttendanceController;
 
@@ -187,6 +188,9 @@ Route::middleware('auth:sanctum')->group(function () {
             ->parameters(['leave-types' => 'leaveType']);
         Route::apiResource('attendance/leave-applications', LeaveApplicationController::class)
             ->parameters(['leave-applications' => 'leaveApplication']);
+        Route::apiResource('attendance/holidays', HolidayController::class)
+            ->parameters(['holidays' => 'holiday'])
+            ->only(['index', 'store', 'update', 'destroy']);
     });
 
     // =====================================================

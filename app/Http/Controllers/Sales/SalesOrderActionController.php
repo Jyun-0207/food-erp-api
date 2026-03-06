@@ -126,8 +126,22 @@ class SalesOrderActionController extends Controller
                         }
                     }
 
-                    // Calculate cost
-                    $itemCost = bcmul((string) ($product->costPrice ?? 0), (string) $actualQty, 2);
+                    // Calculate cost - use unit-specific costPrice if available
+                    $itemUnit = $item['unit'] ?? null;
+                    $unitCostPrice = null;
+                    if ($itemUnit && $product->units && count($product->units) > 0) {
+                        $unitConfig = collect($product->units)->firstWhere('name', $itemUnit);
+                        if ($unitConfig) {
+                            $unitCostPrice = $unitConfig['costPrice'] ?? null;
+                        }
+                    }
+                    if ($unitCostPrice !== null) {
+                        // Unit costPrice × quantity of that unit (e.g. 箱 price × number of 箱)
+                        $itemCost = bcmul((string) $unitCostPrice, (string) $item['quantity'], 2);
+                    } else {
+                        // Fallback: base costPrice × actual qty in base units
+                        $itemCost = bcmul((string) ($product->costPrice ?? 0), (string) $actualQty, 2);
+                    }
                     $totalCost = bcadd($totalCost, $itemCost, 2);
 
                     // 5. Create inventory movement
@@ -417,8 +431,20 @@ class SalesOrderActionController extends Controller
                         ->where('id', $item['productId'])
                         ->increment('stock', $actualQty);
 
-                    // Calculate cost
-                    $itemCost = bcmul((string) ($product->costPrice ?? 0), (string) $actualQty, 2);
+                    // Calculate cost - use unit-specific costPrice if available
+                    $itemUnit = $item['unit'] ?? null;
+                    $unitCostPrice = null;
+                    if ($itemUnit && $product->units && count($product->units) > 0) {
+                        $unitConfig = collect($product->units)->firstWhere('name', $itemUnit);
+                        if ($unitConfig) {
+                            $unitCostPrice = $unitConfig['costPrice'] ?? null;
+                        }
+                    }
+                    if ($unitCostPrice !== null) {
+                        $itemCost = bcmul((string) $unitCostPrice, (string) $item['quantity'], 2);
+                    } else {
+                        $itemCost = bcmul((string) ($product->costPrice ?? 0), (string) $actualQty, 2);
+                    }
                     $totalCost = bcadd($totalCost, $itemCost, 2);
 
                     // Restore batch quantities (movements already stored actual qty)

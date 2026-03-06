@@ -26,6 +26,7 @@ class Employee extends BaseModel
         'shiftTypeId',
         'shiftTypeName',
         'notes',
+        'annualLeaveDays',
     ];
 
     protected function casts(): array
