@@ -7,9 +7,10 @@ use Illuminate\Http\Request;
 
 class CustomerPriceListController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, string $customer)
     {
-        $priceLists = CustomerPriceList::orderBy('updatedAt', 'desc')
+        $priceLists = CustomerPriceList::where('customerId', $customer)
+            ->orderBy('updatedAt', 'desc')
             ->paginate($request->input('per_page', 50));
 
         return response()->json($priceLists);
