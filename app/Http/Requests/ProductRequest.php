@@ -40,6 +40,8 @@ class ProductRequest extends FormRequest
             'requiresBatch' => ['nullable', 'boolean'],
             'shelfLife' => ['nullable', 'integer', 'min:0'],
             'shelfLifeUnit' => ['nullable', 'string'],
+            'openPrice' => ['nullable', 'boolean'],
+            'showOnFrontend' => ['nullable', 'boolean'],
             'isActive' => ['nullable', 'boolean'],
         ];
     }

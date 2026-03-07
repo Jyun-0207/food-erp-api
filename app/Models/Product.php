@@ -32,6 +32,8 @@ class Product extends BaseModel
         'requiresBatch',
         'shelfLife',
         'shelfLifeUnit',
+        'openPrice',
+        'showOnFrontend',
         'isActive',
         'units',
     ];
@@ -48,6 +50,8 @@ class Product extends BaseModel
             'taxable' => 'boolean',
             'purchasable' => 'boolean',
             'requiresBatch' => 'boolean',
+            'openPrice' => 'boolean',
+            'showOnFrontend' => 'boolean',
             'isActive' => 'boolean',
             'stock' => 'integer',
             'minStock' => 'integer',
