@@ -82,20 +82,12 @@ class SalesOrderActionController extends Controller
                 // Detect payment method
                 $paymentMethod = $order->paymentMethod ?? '';
                 $isCheck = str_contains($paymentMethod, '支票');
-                $isWireTransfer = str_contains($paymentMethod, '匯款');
 
                 // Find accounting accounts based on payment method
                 if ($isCheck) {
                     $receivableAccount = $this->accountingService->findAccount('應收票據');
                     if (!$receivableAccount) {
                         throw new \Exception('找不到應收票據科目，請先在會計科目中建立「應收票據」');
-                    }
-                } elseif ($isWireTransfer) {
-                    $receivableAccount = $this->accountingService->findAccount('銀行存款');
-                    if (!$receivableAccount) {
-                        $receivableAccount = $this->accountingService->findAccountByConditions([
-                            ['name' => '銀行'], ['name' => '現金'],
-                        ]);
                     }
                 } else {
                     $receivableAccount = $this->accountingService->findAccount('應收');
@@ -207,8 +199,8 @@ class SalesOrderActionController extends Controller
 
                 // 6. Create accounts receivable
                 $dueDate = now()->addDays($paymentDays);
-                $arPaidAmount = ($order->paymentStatus === 'paid' || $isWireTransfer) ? (float) $order->totalAmount : 0;
-                $arStatus = ($order->paymentStatus === 'paid' || $isWireTransfer) ? 'paid' : 'pending';
+                $arPaidAmount = $order->paymentStatus === 'paid' ? (float) $order->totalAmount : 0;
+                $arStatus = $order->paymentStatus === 'paid' ? 'paid' : 'pending';
                 AccountsReceivable::create([
                     'customerId' => $order->customerId,
                     'customerName' => $order->customerName,

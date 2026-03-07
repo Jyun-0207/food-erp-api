@@ -48,7 +48,6 @@ class PurchaseOrderActionController extends Controller
                 // Detect payment method
                 $paymentMethod = $order->paymentMethod ?? '';
                 $isCheck = str_contains($paymentMethod, '支票');
-                $isWireTransfer = str_contains($paymentMethod, '匯款');
 
                 // Preload products to avoid N+1 queries
                 $entryProductIds = collect($batchEntries)->pluck('productId')->unique();
@@ -119,9 +118,9 @@ class PurchaseOrderActionController extends Controller
                     'orderNumber' => $order->orderNumber,
                     'invoiceNumber' => "AP-{$order->orderNumber}",
                     'amount' => (float) $order->totalAmount,
-                    'paidAmount' => $isWireTransfer ? (float) $order->totalAmount : 0,
+                    'paidAmount' => 0,
                     'dueDate' => $dueDate,
-                    'status' => $isWireTransfer ? 'paid' : 'pending',
+                    'status' => 'pending',
                     'paymentMethod' => $paymentMethod ?: null,
                 ]);
 
@@ -130,13 +129,6 @@ class PurchaseOrderActionController extends Controller
                     $payableAccount = $this->accountingService->findAccount('應付票據');
                     if (!$payableAccount) {
                         throw new \Exception('找不到應付票據科目，請先在會計科目中建立「應付票據」');
-                    }
-                } elseif ($isWireTransfer) {
-                    $payableAccount = $this->accountingService->findAccount('銀行存款');
-                    if (!$payableAccount) {
-                        $payableAccount = $this->accountingService->findAccountByConditions([
-                            ['name' => '銀行'], ['name' => '現金'],
-                        ]);
                     }
                 } else {
                     $payableAccount = $this->accountingService->findAccount('應付');
