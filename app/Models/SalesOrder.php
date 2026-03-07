@@ -24,6 +24,7 @@ class SalesOrder extends BaseModel
         'shippingAddress',
         'paymentMethod',
         'paymentStatus',
+        'orderDate',
         'notes',
         'returnedDate',
         'returnReason',
@@ -38,6 +39,7 @@ class SalesOrder extends BaseModel
             'tax' => 'decimal:2',
             'shipping' => 'decimal:2',
             'totalAmount' => 'decimal:2',
+            'orderDate' => 'date',
             'returnedDate' => 'datetime',
         ];
     }

@@ -19,6 +19,7 @@ class PurchaseOrder extends BaseModel
         'items',
         'totalAmount',
         'paymentMethod',
+        'orderDate',
         'expectedDate',
         'receivedDate',
         'returnedDate',
@@ -34,6 +35,7 @@ class PurchaseOrder extends BaseModel
         return [
             'items' => 'array',
             'totalAmount' => 'decimal:2',
+            'orderDate' => 'date',
             'expectedDate' => 'date',
             'receivedDate' => 'date',
             'returnedDate' => 'date',
