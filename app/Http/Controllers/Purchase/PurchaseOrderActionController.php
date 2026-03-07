@@ -45,6 +45,11 @@ class PurchaseOrderActionController extends Controller
                     $paymentDays = intval($order->supplier->paymentTerms) ?: 30;
                 }
 
+                // Detect payment method
+                $paymentMethod = $order->paymentMethod ?? '';
+                $isCheck = str_contains($paymentMethod, '支票');
+                $isWireTransfer = str_contains($paymentMethod, '匯款');
+
                 // Preload products to avoid N+1 queries
                 $entryProductIds = collect($batchEntries)->pluck('productId')->unique();
                 $productsMap = Product::whereIn('id', $entryProductIds)->get()->keyBy('id');
@@ -114,13 +119,29 @@ class PurchaseOrderActionController extends Controller
                     'orderNumber' => $order->orderNumber,
                     'invoiceNumber' => "AP-{$order->orderNumber}",
                     'amount' => (float) $order->totalAmount,
-                    'paidAmount' => 0,
+                    'paidAmount' => $isWireTransfer ? (float) $order->totalAmount : 0,
                     'dueDate' => $dueDate,
-                    'status' => 'pending',
+                    'status' => $isWireTransfer ? 'paid' : 'pending',
+                    'paymentMethod' => $paymentMethod ?: null,
                 ]);
 
-                // Find accounting accounts
-                $payableAccount = $this->accountingService->findAccount('應付');
+                // Find accounting accounts based on payment method
+                if ($isCheck) {
+                    $payableAccount = $this->accountingService->findAccount('應付票據');
+                    if (!$payableAccount) {
+                        throw new \Exception('找不到應付票據科目，請先在會計科目中建立「應付票據」');
+                    }
+                } elseif ($isWireTransfer) {
+                    $payableAccount = $this->accountingService->findAccount('銀行存款');
+                    if (!$payableAccount) {
+                        $payableAccount = $this->accountingService->findAccountByConditions([
+                            ['name' => '銀行'], ['name' => '現金'],
+                        ]);
+                    }
+                } else {
+                    $payableAccount = $this->accountingService->findAccount('應付');
+                }
+
                 $defaultPurchaseAccount = $this->accountingService->findAccountByConditions([
                     ['name' => '進貨'], ['name' => '存貨'], ['type' => 'expense'],
                 ]);
@@ -208,6 +229,89 @@ class PurchaseOrderActionController extends Controller
             return response()->json($result);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
+        }
+    }
+
+    /**
+     * Pay by check for a purchase order (應付票據 → 銀行存款).
+     */
+    public function payCheck(Request $request, string $id)
+    {
+        $userName = $request->user()?->name ?? '系統';
+
+        try {
+            $result = DB::transaction(function () use ($id, $userName) {
+                $order = PurchaseOrder::with('supplier')->findOrFail($id);
+
+                $ap = AccountsPayable::where('orderId', $id)->first();
+                if (!$ap) {
+                    throw new \Exception('CONFLICT:找不到應付帳款記錄');
+                }
+                if ($ap->status === 'paid') {
+                    throw new \Exception('CONFLICT:此應付票據已付款');
+                }
+
+                $checkAccount = $this->accountingService->findAccount('應付票據');
+                $bankAccount = $this->accountingService->findAccount('銀行存款');
+                if (!$bankAccount) {
+                    $bankAccount = $this->accountingService->findAccountByConditions([
+                        ['name' => '銀行'], ['name' => '現金'],
+                    ]);
+                }
+
+                if (!$checkAccount) {
+                    throw new \Exception('CONFLICT:找不到應付票據科目');
+                }
+                if (!$bankAccount) {
+                    throw new \Exception('CONFLICT:找不到銀行存款科目');
+                }
+
+                $amount = (float) $ap->amount;
+
+                $voucherLines = [
+                    [
+                        'accountId' => $checkAccount->id,
+                        'accountCode' => $checkAccount->code,
+                        'accountName' => $checkAccount->name,
+                        'debit' => $amount,
+                        'credit' => 0,
+                        'description' => "支票付款 - {$order->supplierName}",
+                    ],
+                    [
+                        'accountId' => $bankAccount->id,
+                        'accountCode' => $bankAccount->code,
+                        'accountName' => $bankAccount->name,
+                        'debit' => 0,
+                        'credit' => $amount,
+                        'description' => "銀行存款支出 - 採購單 {$order->orderNumber}",
+                    ],
+                ];
+
+                $voucherNumber = $this->accountingService->generateVoucherNumber('P');
+
+                $this->accountingService->createVoucherAndJournal([
+                    'voucherNumber' => $voucherNumber,
+                    'voucherType' => 'payment',
+                    'voucherDate' => now(),
+                    'description' => "支票付款 - {$order->supplierName} - 採購單 {$order->orderNumber}",
+                    'reference' => "PO-CHK-{$order->orderNumber}",
+                ], $voucherLines, $userName);
+
+                $this->accountingService->updateAccountBalance($checkAccount->id, $amount, 'decrement');
+                $this->accountingService->updateAccountBalance($bankAccount->id, $amount, 'decrement');
+
+                $ap->update(['status' => 'paid', 'paidAmount' => $ap->amount]);
+
+                return $order->load('supplier');
+            });
+
+            return response()->json($result);
+        } catch (\Exception $e) {
+            $message = $e->getMessage();
+            if (str_starts_with($message, 'CONFLICT:')) {
+                return response()->json(['message' => str_replace('CONFLICT:', '', $message)], 409);
+            }
+            return response()->json(['message' => $message], 400);
         }
     }
 

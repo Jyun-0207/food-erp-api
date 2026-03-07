@@ -43,12 +43,16 @@ class SalesOrderActionController extends Controller
                 $productIds = collect($items)->pluck('productId')->unique();
                 $productsMap = Product::whereIn('id', $productIds)->get()->keyBy('id');
 
-                // 2. Validate stock and batch availability
+                // 2. Validate stock and batch availability (skip openPrice products)
                 foreach ($items as $item) {
                     $product = $productsMap->get($item['productId']);
                     if (!$product) {
                         throw new \Exception("產品 {$item['productName']} 不存在");
                     }
+
+                    // openPrice products have no inventory
+                    if (!empty($product->openPrice)) continue;
+
                     $conversionFactor = isset($item['unitConversionFactor']) ? (int) $item['unitConversionFactor'] : 1;
                     $actualQty = $item['quantity'] * $conversionFactor;
                     if ($product->stock < $actualQty) {
@@ -75,8 +79,28 @@ class SalesOrderActionController extends Controller
                     }
                 }
 
-                // Find accounting accounts
-                $receivableAccount = $this->accountingService->findAccount('應收');
+                // Detect payment method
+                $paymentMethod = $order->paymentMethod ?? '';
+                $isCheck = str_contains($paymentMethod, '支票');
+                $isWireTransfer = str_contains($paymentMethod, '匯款');
+
+                // Find accounting accounts based on payment method
+                if ($isCheck) {
+                    $receivableAccount = $this->accountingService->findAccount('應收票據');
+                    if (!$receivableAccount) {
+                        throw new \Exception('找不到應收票據科目，請先在會計科目中建立「應收票據」');
+                    }
+                } elseif ($isWireTransfer) {
+                    $receivableAccount = $this->accountingService->findAccount('銀行存款');
+                    if (!$receivableAccount) {
+                        $receivableAccount = $this->accountingService->findAccountByConditions([
+                            ['name' => '銀行'], ['name' => '現金'],
+                        ]);
+                    }
+                } else {
+                    $receivableAccount = $this->accountingService->findAccount('應收');
+                }
+
                 $defaultRevenueAccount = $this->accountingService->findAccountByConditions([
                     ['name' => '銷售'], ['name' => '營收'], ['type' => 'revenue'],
                 ]);
@@ -104,59 +128,60 @@ class SalesOrderActionController extends Controller
                     $conversionFactor = isset($item['unitConversionFactor']) ? (int) $item['unitConversionFactor'] : 1;
                     $actualQty = $item['quantity'] * $conversionFactor;
 
-                    $beforeStock = $product->stock;
+                    // openPrice products have no inventory — skip stock/batch/movement/cost
+                    if (empty($product->openPrice)) {
+                        $beforeStock = $product->stock;
 
-                    // 3. Atomic stock decrement
-                    DB::table('products')
-                        ->where('id', $item['productId'])
-                        ->decrement('stock', $actualQty);
+                        // 3. Atomic stock decrement
+                        DB::table('products')
+                            ->where('id', $item['productId'])
+                            ->decrement('stock', $actualQty);
 
-                    // 4. Deduct from batches
-                    $selection = collect($batchSelections)->firstWhere('productId', $item['productId']);
-                    $usedBatches = [];
-                    if (!empty($selection['requiresBatch'])) {
-                        foreach ($selection['selectedBatches'] as $batchSel) {
-                            if (($batchSel['quantity'] ?? 0) <= 0) continue;
-                            $batchActualQty = $batchSel['quantity'] * $conversionFactor;
-                            $batch = ProductBatch::find($batchSel['batchId']);
-                            DB::table('product_batches')
-                                ->where('id', $batchSel['batchId'])
-                                ->decrement('currentQuantity', $batchActualQty);
-                            $usedBatches[] = ($batch->batchNumber ?? $batchSel['batchId']) . "({$batchActualQty})";
+                        // 4. Deduct from batches
+                        $selection = collect($batchSelections)->firstWhere('productId', $item['productId']);
+                        $usedBatches = [];
+                        if (!empty($selection['requiresBatch'])) {
+                            foreach ($selection['selectedBatches'] as $batchSel) {
+                                if (($batchSel['quantity'] ?? 0) <= 0) continue;
+                                $batchActualQty = $batchSel['quantity'] * $conversionFactor;
+                                $batch = ProductBatch::find($batchSel['batchId']);
+                                DB::table('product_batches')
+                                    ->where('id', $batchSel['batchId'])
+                                    ->decrement('currentQuantity', $batchActualQty);
+                                $usedBatches[] = ($batch->batchNumber ?? $batchSel['batchId']) . "({$batchActualQty})";
+                            }
                         }
-                    }
 
-                    // Calculate cost - use unit-specific costPrice if available
-                    $itemUnit = $item['unit'] ?? null;
-                    $unitCostPrice = null;
-                    if ($itemUnit && $product->units && count($product->units) > 0) {
-                        $unitConfig = collect($product->units)->firstWhere('name', $itemUnit);
-                        if ($unitConfig) {
-                            $unitCostPrice = $unitConfig['costPrice'] ?? null;
+                        // Calculate cost - use unit-specific costPrice if available
+                        $itemUnit = $item['unit'] ?? null;
+                        $unitCostPrice = null;
+                        if ($itemUnit && $product->units && count($product->units) > 0) {
+                            $unitConfig = collect($product->units)->firstWhere('name', $itemUnit);
+                            if ($unitConfig) {
+                                $unitCostPrice = $unitConfig['costPrice'] ?? null;
+                            }
                         }
-                    }
-                    if ($unitCostPrice !== null) {
-                        // Unit costPrice × quantity of that unit (e.g. 箱 price × number of 箱)
-                        $itemCost = bcmul((string) $unitCostPrice, (string) $item['quantity'], 2);
-                    } else {
-                        // Fallback: base costPrice × actual qty in base units
-                        $itemCost = bcmul((string) ($product->costPrice ?? 0), (string) $actualQty, 2);
-                    }
-                    $totalCost = bcadd($totalCost, $itemCost, 2);
+                        if ($unitCostPrice !== null) {
+                            $itemCost = bcmul((string) $unitCostPrice, (string) $item['quantity'], 2);
+                        } else {
+                            $itemCost = bcmul((string) ($product->costPrice ?? 0), (string) $actualQty, 2);
+                        }
+                        $totalCost = bcadd($totalCost, $itemCost, 2);
 
-                    // 5. Create inventory movement
-                    $batchInfo = count($usedBatches) > 0 ? ' - 批號: ' . implode(', ', $usedBatches) : '';
-                    InventoryMovement::create([
-                        'productId' => $item['productId'],
-                        'productName' => $item['productName'],
-                        'type' => 'out',
-                        'quantity' => $actualQty,
-                        'beforeStock' => $beforeStock,
-                        'afterStock' => $beforeStock - $actualQty,
-                        'reason' => "銷售出貨 - 訂單 {$order->orderNumber}{$batchInfo}",
-                        'reference' => $id,
-                        'createdBy' => $userName,
-                    ]);
+                        // 5. Create inventory movement
+                        $batchInfo = count($usedBatches) > 0 ? ' - 批號: ' . implode(', ', $usedBatches) : '';
+                        InventoryMovement::create([
+                            'productId' => $item['productId'],
+                            'productName' => $item['productName'],
+                            'type' => 'out',
+                            'quantity' => $actualQty,
+                            'beforeStock' => $beforeStock,
+                            'afterStock' => $beforeStock - $actualQty,
+                            'reason' => "銷售出貨 - 訂單 {$order->orderNumber}{$batchInfo}",
+                            'reference' => $id,
+                            'createdBy' => $userName,
+                        ]);
+                    }
 
                     // Track revenue by account
                     $salesAccount = $defaultRevenueAccount;
@@ -182,6 +207,8 @@ class SalesOrderActionController extends Controller
 
                 // 6. Create accounts receivable
                 $dueDate = now()->addDays($paymentDays);
+                $arPaidAmount = ($order->paymentStatus === 'paid' || $isWireTransfer) ? (float) $order->totalAmount : 0;
+                $arStatus = ($order->paymentStatus === 'paid' || $isWireTransfer) ? 'paid' : 'pending';
                 AccountsReceivable::create([
                     'customerId' => $order->customerId,
                     'customerName' => $order->customerName,
@@ -189,9 +216,10 @@ class SalesOrderActionController extends Controller
                     'orderNumber' => $order->orderNumber,
                     'invoiceNumber' => $order->orderNumber,
                     'amount' => (float) $order->totalAmount,
-                    'paidAmount' => $order->paymentStatus === 'paid' ? (float) $order->totalAmount : 0,
+                    'paidAmount' => $arPaidAmount,
                     'dueDate' => $dueDate,
-                    'status' => $order->paymentStatus === 'paid' ? 'paid' : 'pending',
+                    'status' => $arStatus,
+                    'paymentMethod' => $paymentMethod ?: null,
                 ]);
 
                 // 7. Create revenue voucher + journal entry
@@ -424,67 +452,70 @@ class SalesOrderActionController extends Controller
                     $conversionFactor = isset($item['unitConversionFactor']) ? (int) $item['unitConversionFactor'] : 1;
                     $actualQty = $item['quantity'] * $conversionFactor;
 
-                    $beforeStock = $product->stock;
+                    // openPrice products have no inventory — skip stock/batch/movement/cost
+                    if (empty($product->openPrice)) {
+                        $beforeStock = $product->stock;
 
-                    // Restore stock
-                    DB::table('products')
-                        ->where('id', $item['productId'])
-                        ->increment('stock', $actualQty);
+                        // Restore stock
+                        DB::table('products')
+                            ->where('id', $item['productId'])
+                            ->increment('stock', $actualQty);
 
-                    // Calculate cost - use unit-specific costPrice if available
-                    $itemUnit = $item['unit'] ?? null;
-                    $unitCostPrice = null;
-                    if ($itemUnit && $product->units && count($product->units) > 0) {
-                        $unitConfig = collect($product->units)->firstWhere('name', $itemUnit);
-                        if ($unitConfig) {
-                            $unitCostPrice = $unitConfig['costPrice'] ?? null;
+                        // Calculate cost - use unit-specific costPrice if available
+                        $itemUnit = $item['unit'] ?? null;
+                        $unitCostPrice = null;
+                        if ($itemUnit && $product->units && count($product->units) > 0) {
+                            $unitConfig = collect($product->units)->firstWhere('name', $itemUnit);
+                            if ($unitConfig) {
+                                $unitCostPrice = $unitConfig['costPrice'] ?? null;
+                            }
                         }
-                    }
-                    if ($unitCostPrice !== null) {
-                        $itemCost = bcmul((string) $unitCostPrice, (string) $item['quantity'], 2);
-                    } else {
-                        $itemCost = bcmul((string) ($product->costPrice ?? 0), (string) $actualQty, 2);
-                    }
-                    $totalCost = bcadd($totalCost, $itemCost, 2);
+                        if ($unitCostPrice !== null) {
+                            $itemCost = bcmul((string) $unitCostPrice, (string) $item['quantity'], 2);
+                        } else {
+                            $itemCost = bcmul((string) ($product->costPrice ?? 0), (string) $actualQty, 2);
+                        }
+                        $totalCost = bcadd($totalCost, $itemCost, 2);
 
-                    // Restore batch quantities (movements already stored actual qty)
-                    $movements = InventoryMovement::where('reference', $id)
-                        ->where('productId', $item['productId'])
-                        ->where('type', 'out')
-                        ->get();
+                        // Restore batch quantities (movements already stored actual qty)
+                        $movements = InventoryMovement::where('reference', $id)
+                            ->where('productId', $item['productId'])
+                            ->where('type', 'out')
+                            ->get();
 
-                    foreach ($movements as $movement) {
-                        if (preg_match('/批號: (.+)/', $movement->reason, $batchMatch)) {
-                            $batchEntries = explode(', ', $batchMatch[1]);
-                            foreach ($batchEntries as $entry) {
-                                if (preg_match('/(.+)\((\d+)\)/', $entry, $match)) {
-                                    $batchNumber = $match[1];
-                                    $qty = (int) $match[2];
-                                    $batch = ProductBatch::where('batchNumber', $batchNumber)
-                                        ->where('productId', $item['productId'])
-                                        ->first();
-                                    if ($batch) {
-                                        DB::table('product_batches')
-                                            ->where('id', $batch->id)
-                                            ->increment('currentQuantity', $qty);
+                        foreach ($movements as $movement) {
+                            if (preg_match('/批號: (.+)/', $movement->reason, $batchMatch)) {
+                                $batchEntries = explode(', ', $batchMatch[1]);
+                                foreach ($batchEntries as $entry) {
+                                    if (preg_match('/(.+)\((\d+)\)/', $entry, $match)) {
+                                        $batchNumber = $match[1];
+                                        $qty = (int) $match[2];
+                                        $batch = ProductBatch::where('batchNumber', $batchNumber)
+                                            ->where('productId', $item['productId'])
+                                            ->first();
+                                        if ($batch) {
+                                            DB::table('product_batches')
+                                                ->where('id', $batch->id)
+                                                ->increment('currentQuantity', $qty);
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    // Create return inventory movement
-                    InventoryMovement::create([
-                        'productId' => $item['productId'],
-                        'productName' => $item['productName'],
-                        'type' => 'in',
-                        'quantity' => $actualQty,
-                        'beforeStock' => $beforeStock,
-                        'afterStock' => $beforeStock + $actualQty,
-                        'reason' => "銷售退貨 - {$returnReason}",
-                        'reference' => $id,
-                        'createdBy' => $userName,
-                    ]);
+                        // Create return inventory movement
+                        InventoryMovement::create([
+                            'productId' => $item['productId'],
+                            'productName' => $item['productName'],
+                            'type' => 'in',
+                            'quantity' => $actualQty,
+                            'beforeStock' => $beforeStock,
+                            'afterStock' => $beforeStock + $actualQty,
+                            'reason' => "銷售退貨 - {$returnReason}",
+                            'reference' => $id,
+                            'createdBy' => $userName,
+                        ]);
+                    }
 
                     // Track revenue by account
                     $salesAccount = $defaultRevenueAccount;
@@ -664,6 +695,89 @@ class SalesOrderActionController extends Controller
                 return response()->json(['message' => str_replace('CONFLICT:', '', $message)], 409);
             }
 
+            return response()->json(['message' => $message], 400);
+        }
+    }
+
+    /**
+     * Clear a check for a sales order (應收票據 → 銀行存款).
+     */
+    public function clearCheck(Request $request, string $id)
+    {
+        $userName = $request->user()?->name ?? '系統';
+
+        try {
+            $result = DB::transaction(function () use ($id, $userName) {
+                $order = SalesOrder::with('customer')->findOrFail($id);
+
+                $ar = AccountsReceivable::where('orderId', $id)->first();
+                if (!$ar) {
+                    throw new \Exception('CONFLICT:找不到應收帳款記錄');
+                }
+                if ($ar->status === 'paid') {
+                    throw new \Exception('CONFLICT:此應收票據已兌現');
+                }
+
+                $checkAccount = $this->accountingService->findAccount('應收票據');
+                $bankAccount = $this->accountingService->findAccount('銀行存款');
+                if (!$bankAccount) {
+                    $bankAccount = $this->accountingService->findAccountByConditions([
+                        ['name' => '銀行'], ['name' => '現金'],
+                    ]);
+                }
+
+                if (!$checkAccount) {
+                    throw new \Exception('CONFLICT:找不到應收票據科目');
+                }
+                if (!$bankAccount) {
+                    throw new \Exception('CONFLICT:找不到銀行存款科目');
+                }
+
+                $amount = (float) $ar->amount;
+
+                $voucherLines = [
+                    [
+                        'accountId' => $bankAccount->id,
+                        'accountCode' => $bankAccount->code,
+                        'accountName' => $bankAccount->name,
+                        'debit' => $amount,
+                        'credit' => 0,
+                        'description' => "支票兌現 - {$order->customerName}",
+                    ],
+                    [
+                        'accountId' => $checkAccount->id,
+                        'accountCode' => $checkAccount->code,
+                        'accountName' => $checkAccount->name,
+                        'debit' => 0,
+                        'credit' => $amount,
+                        'description' => "應收票據兌現 - 訂單 {$order->orderNumber}",
+                    ],
+                ];
+
+                $voucherNumber = $this->accountingService->generateVoucherNumber('R');
+
+                $this->accountingService->createVoucherAndJournal([
+                    'voucherNumber' => $voucherNumber,
+                    'voucherType' => 'receipt',
+                    'voucherDate' => now(),
+                    'description' => "支票兌現 - {$order->customerName} - 訂單 {$order->orderNumber}",
+                    'reference' => "SO-CHK-{$order->orderNumber}",
+                ], $voucherLines, $userName);
+
+                $this->accountingService->updateAccountBalance($bankAccount->id, $amount, 'increment');
+                $this->accountingService->updateAccountBalance($checkAccount->id, $amount, 'decrement');
+
+                $ar->update(['status' => 'paid', 'paidAmount' => $ar->amount]);
+
+                return $order->load('customer');
+            });
+
+            return response()->json($result);
+        } catch (\Exception $e) {
+            $message = $e->getMessage();
+            if (str_starts_with($message, 'CONFLICT:')) {
+                return response()->json(['message' => str_replace('CONFLICT:', '', $message)], 409);
+            }
             return response()->json(['message' => $message], 400);
         }
     }

@@ -18,6 +18,7 @@ class AccountsPayable extends BaseModel
         'paidAmount',
         'dueDate',
         'status',
+        'paymentMethod',
     ];
 
     protected function casts(): array

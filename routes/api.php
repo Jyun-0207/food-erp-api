@@ -142,12 +142,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/sales-orders/{id}/ship', [SalesOrderActionController::class, 'ship']);
         Route::post('/sales-orders/{id}/return', [SalesOrderActionController::class, 'returnOrder']);
         Route::post('/sales-orders/{id}/refund', [SalesOrderActionController::class, 'refund']);
+        Route::post('/sales-orders/{id}/clear-check', [SalesOrderActionController::class, 'clearCheck']);
 
         // Purchase Orders
         Route::apiResource('purchase-orders', PurchaseOrderController::class);
         Route::post('/purchase-orders/{id}/receive', [PurchaseOrderActionController::class, 'receive']);
         Route::post('/purchase-orders/{id}/return', [PurchaseOrderActionController::class, 'returnOrder']);
         Route::post('/purchase-orders/{id}/refund', [PurchaseOrderActionController::class, 'refund']);
+        Route::post('/purchase-orders/{id}/pay-check', [PurchaseOrderActionController::class, 'payCheck']);
 
         // Manufacturing
         Route::apiResource('boms', BomController::class);
