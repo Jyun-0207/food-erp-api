@@ -23,8 +23,7 @@ class SupplierController extends Controller
             $query->where('isActive', filter_var($request->input('isActive'), FILTER_VALIDATE_BOOLEAN));
         }
 
-        $suppliers = $query->orderBy('createdAt', 'desc')
-            ->paginate($request->input('per_page', 50));
+        $suppliers = $query->orderBy('createdAt', 'desc')->get();
 
         return response()->json($suppliers);
     }

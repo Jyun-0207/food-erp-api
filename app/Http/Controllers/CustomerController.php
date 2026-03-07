@@ -24,8 +24,7 @@ class CustomerController extends Controller
             $query->where('isActive', filter_var($request->input('isActive'), FILTER_VALIDATE_BOOLEAN));
         }
 
-        $customers = $query->orderBy('createdAt', 'desc')
-            ->paginate($request->input('per_page', 50));
+        $customers = $query->orderBy('createdAt', 'desc')->get();
 
         return response()->json($customers);
     }
