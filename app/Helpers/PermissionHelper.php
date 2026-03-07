@@ -5,7 +5,7 @@ namespace App\Helpers;
 class PermissionHelper
 {
     public const MODULE_KEYS = [
-        'dashboard', 'messages', 'products', 'inventory', 'procurement',
+        'dashboard', 'messages', 'calendar', 'analytics', 'products', 'inventory', 'procurement',
         'sales', 'manufacturing', 'accounting', 'customers', 'suppliers',
         'reports', 'users', 'employees', 'attendance', 'settings',
     ];
@@ -20,7 +20,7 @@ class PermissionHelper
         return match ($role) {
             'admin' => $all('admin'),
             'manager' => array_merge($all('manager'), ['users' => '', 'settings' => '']),
-            'staff' => array_merge($all(''), ['dashboard' => 'staff', 'attendance' => 'staff']),
+            'staff' => array_merge($all(''), ['dashboard' => 'staff', 'calendar' => 'staff', 'attendance' => 'staff']),
             default => $all(''),
         };
     }
