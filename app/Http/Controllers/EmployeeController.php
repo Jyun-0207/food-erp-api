@@ -29,7 +29,7 @@ class EmployeeController extends Controller
         }
 
         $employees = $query->orderBy('createdAt', 'desc')
-            ->paginate($request->input('per_page', 50));
+            ->get();
 
         // Strip pinCode, add hasPinCode boolean (matching original API)
         $employees->getCollection()->transform(function ($employee) {

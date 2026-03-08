@@ -34,7 +34,7 @@ class AttendanceRecordController extends Controller
         }
 
         $records = $query->orderBy('createdAt', 'desc')
-            ->paginate($request->input('per_page', 50));
+            ->get();
 
         // Normalize: date → "YYYY-MM-DD", checkInTime/checkOutTime → "HH:mm"
         $records->getCollection()->transform(fn ($r) => $this->normalizeRecord($r));

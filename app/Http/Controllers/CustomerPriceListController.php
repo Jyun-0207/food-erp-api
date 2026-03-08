@@ -11,7 +11,7 @@ class CustomerPriceListController extends Controller
     {
         $priceLists = CustomerPriceList::where('customerId', $customer)
             ->orderBy('updatedAt', 'desc')
-            ->paginate($request->input('per_page', 50));
+            ->get();
 
         return response()->json($priceLists);
     }

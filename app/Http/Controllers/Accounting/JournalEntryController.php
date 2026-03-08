@@ -25,7 +25,7 @@ class JournalEntryController extends Controller
         }
 
         $entries = $query->orderBy('date', 'desc')
-            ->paginate($request->input('per_page', 50));
+            ->get();
 
         return response()->json($entries);
     }

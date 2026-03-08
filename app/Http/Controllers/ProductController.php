@@ -28,7 +28,7 @@ class ProductController extends Controller
         }
 
         $products = $query->orderBy('createdAt', 'desc')
-            ->paginate($request->input('per_page', 50));
+            ->get();
 
         // Strip costPrice for unauthenticated users
         if (!auth()->guard('sanctum')->user()) {

@@ -12,7 +12,7 @@ class VisitorController extends Controller
     public function index(Request $request)
     {
         $visitors = VisitorRecord::orderBy('timestamp', 'desc')
-            ->paginate($request->input('per_page', 50));
+            ->get();
 
         return response()->json($visitors);
     }

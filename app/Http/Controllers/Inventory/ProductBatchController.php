@@ -26,7 +26,7 @@ class ProductBatchController extends Controller
         }
 
         $batches = $query->orderBy('createdAt', 'desc')
-            ->paginate($request->input('per_page', 50));
+            ->get();
 
         return response()->json($batches);
     }

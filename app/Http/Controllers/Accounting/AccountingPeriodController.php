@@ -22,7 +22,7 @@ class AccountingPeriodController extends Controller
 
         $periods = $query->orderBy('year', 'desc')
             ->orderBy('month', 'desc')
-            ->paginate($request->input('per_page', 50));
+            ->get();
 
         return response()->json($periods);
     }

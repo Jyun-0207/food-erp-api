@@ -11,7 +11,7 @@ class SupplierPriceListController extends Controller
     {
         $priceLists = SupplierPriceList::where('supplierId', $supplier)
             ->orderBy('createdAt', 'desc')
-            ->paginate($request->input('per_page', 50));
+            ->get();
 
         return response()->json($priceLists);
     }

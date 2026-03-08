@@ -34,7 +34,7 @@ class AccountingVoucherController extends Controller
         }
 
         $vouchers = $query->orderBy('createdAt', 'desc')
-            ->paginate($request->input('per_page', 50));
+            ->get();
 
         return response()->json($vouchers);
     }
