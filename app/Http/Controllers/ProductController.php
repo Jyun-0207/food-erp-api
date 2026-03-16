@@ -32,7 +32,7 @@ class ProductController extends Controller
 
         // Strip costPrice for unauthenticated users
         if (!auth()->guard('sanctum')->user()) {
-            $products->getCollection()->transform(function ($product) {
+            $products = $products->map(function ($product) {
                 $product->makeHidden('costPrice');
                 return $product;
             });

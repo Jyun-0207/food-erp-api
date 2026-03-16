@@ -32,7 +32,7 @@ class EmployeeController extends Controller
             ->get();
 
         // Strip pinCode, add hasPinCode boolean (matching original API)
-        $employees->getCollection()->transform(function ($employee) {
+        $employees = $employees->map(function ($employee) {
             return $this->stripPinCode($employee);
         });
 

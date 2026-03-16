@@ -37,7 +37,7 @@ class AttendanceRecordController extends Controller
             ->get();
 
         // Normalize: date → "YYYY-MM-DD", checkInTime/checkOutTime → "HH:mm"
-        $records->getCollection()->transform(fn ($r) => $this->normalizeRecord($r));
+        $records = $records->map(fn ($r) => $this->normalizeRecord($r));
 
         return response()->json($records);
     }
