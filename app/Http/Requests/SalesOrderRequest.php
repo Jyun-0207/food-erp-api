@@ -35,6 +35,7 @@ class SalesOrderRequest extends FormRequest
             'paymentMethod' => ['nullable', 'string'],
             'paymentStatus' => ['nullable', 'string'],
             'orderDate' => ['nullable', 'date'],
+            'numberingDate' => ['nullable', 'date'],
             'notes' => ['nullable', 'max:2000'],
         ];
     }

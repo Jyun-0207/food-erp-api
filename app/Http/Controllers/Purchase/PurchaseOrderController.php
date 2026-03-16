@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Purchase;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\PurchaseOrderRequest;
 use App\Models\PurchaseOrder;
+use App\Models\SiteSetting;
 use App\Services\AccountingService;
 use Illuminate\Http\Request;
 
@@ -37,7 +38,15 @@ class PurchaseOrderController extends Controller
         $data = $request->validated();
 
         if (empty($data['orderNumber'])) {
-            $data['orderNumber'] = $this->accountingService->generateOrderNumber('purchase_orders', 'PO');
+            $settings = SiteSetting::whereIn('key', ['purchaseOrderPrefix', 'purchaseOrderDigits'])->pluck('value', 'key');
+            $prefix = $settings['purchaseOrderPrefix'] ?? 'PO';
+            $digits = (int) ($settings['purchaseOrderDigits'] ?? 4);
+            $numberingDate = $data['numberingDate'] ?? null;
+            if (!$numberingDate) {
+                $data['numberingDate'] = now()->toDateString();
+                $numberingDate = $data['numberingDate'];
+            }
+            $data['orderNumber'] = $this->accountingService->generateOrderNumber('purchase_orders', $prefix, $digits, $numberingDate);
         }
 
         $order = new PurchaseOrder();

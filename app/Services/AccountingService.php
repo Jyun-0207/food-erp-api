@@ -31,21 +31,20 @@ class AccountingService
 
     /**
      * Generate order number for sales_orders or purchase_orders.
-     * Format: {prefix}{YYYYMMDD}{4-digit seq}
+     * Format: {prefix}{YYYYMMDD}{digits-digit seq}
+     * @param string|null $date  Date string (Y-m-d) to use for numbering; defaults to today.
      */
-    public function generateOrderNumber(string $model, string $prefix): string
+    public function generateOrderNumber(string $model, string $prefix, int $digits = 4, ?string $date = null): string
     {
-        $dateStr = now()->format('Ymd');
-        $startOfDay = now()->startOfDay();
-        $endOfDay = now()->endOfDay();
+        $carbon = $date ? \Carbon\Carbon::parse($date) : now();
+        $dateStr = $carbon->format('Ymd');
 
         $count = DB::table($model)
             ->where('orderNumber', 'like', "{$prefix}{$dateStr}%")
-            ->whereBetween('createdAt', [$startOfDay, $endOfDay])
             ->lockForUpdate()
             ->count();
 
-        $seq = str_pad((string) ($count + 1), 4, '0', STR_PAD_LEFT);
+        $seq = str_pad((string) ($count + 1), $digits, '0', STR_PAD_LEFT);
 
         return "{$prefix}{$dateStr}{$seq}";
     }

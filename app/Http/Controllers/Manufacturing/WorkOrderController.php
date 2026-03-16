@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Manufacturing;
 
 use App\Http\Controllers\Controller;
+use App\Models\SiteSetting;
 use App\Models\WorkOrder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -43,11 +44,15 @@ class WorkOrderController extends Controller
 
         // Auto-generate workOrderNumber if not provided
         if (empty($data['workOrderNumber'])) {
+            $settings = SiteSetting::whereIn('key', ['workOrderPrefix', 'workOrderDigits'])->pluck('value', 'key');
+            $prefix = $settings['workOrderPrefix'] ?? 'WO';
+            $digits = (int) ($settings['workOrderDigits'] ?? 4);
             $dateStr = now()->format('Ymd');
             $count = DB::table('work_orders')
+                ->where('workOrderNumber', 'like', "{$prefix}{$dateStr}%")
                 ->whereBetween('createdAt', [now()->startOfDay(), now()->endOfDay()])
                 ->count();
-            $data['workOrderNumber'] = 'WO' . $dateStr . str_pad((string) ($count + 1), 4, '0', STR_PAD_LEFT);
+            $data['workOrderNumber'] = $prefix . $dateStr . str_pad((string) ($count + 1), $digits, '0', STR_PAD_LEFT);
         }
 
         $order = WorkOrder::create($data);

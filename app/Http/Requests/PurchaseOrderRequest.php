@@ -27,6 +27,7 @@ class PurchaseOrderRequest extends FormRequest
             'items.*.unitConversionFactor' => ['nullable', 'integer', 'min:1'],
             'totalAmount' => [$required, 'numeric', 'min:0'],
             'orderDate' => ['nullable', 'date'],
+            'numberingDate' => ['nullable', 'date'],
             'expectedDate' => ['nullable', 'date'],
             'notes' => ['nullable', 'max:2000'],
         ];

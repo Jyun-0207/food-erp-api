@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Sales;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SalesOrderRequest;
 use App\Models\SalesOrder;
+use App\Models\SiteSetting;
 use App\Services\AccountingService;
 use Illuminate\Http\Request;
 
@@ -41,7 +42,15 @@ class SalesOrderController extends Controller
         $data = $request->validated();
 
         if (empty($data['orderNumber'])) {
-            $data['orderNumber'] = $this->accountingService->generateOrderNumber('sales_orders', 'SO');
+            $settings = SiteSetting::whereIn('key', ['salesOrderPrefix', 'salesOrderDigits'])->pluck('value', 'key');
+            $prefix = $settings['salesOrderPrefix'] ?? 'SO';
+            $digits = (int) ($settings['salesOrderDigits'] ?? 4);
+            $numberingDate = $data['numberingDate'] ?? null;
+            if (!$numberingDate) {
+                $data['numberingDate'] = now()->toDateString();
+                $numberingDate = $data['numberingDate'];
+            }
+            $data['orderNumber'] = $this->accountingService->generateOrderNumber('sales_orders', $prefix, $digits, $numberingDate);
         }
 
         $order = new SalesOrder();
