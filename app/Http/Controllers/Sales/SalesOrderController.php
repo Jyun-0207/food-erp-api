@@ -41,16 +41,10 @@ class SalesOrderController extends Controller
     {
         $data = $request->validated();
 
-        if (empty($data['orderNumber'])) {
-            $settings = SiteSetting::whereIn('key', ['salesOrderPrefix', 'salesOrderDigits'])->pluck('value', 'key');
-            $prefix = $settings['salesOrderPrefix'] ?? 'SO';
-            $digits = (int) ($settings['salesOrderDigits'] ?? 4);
-            $numberingDate = $data['numberingDate'] ?? null;
-            if (!$numberingDate) {
-                $data['numberingDate'] = now()->toDateString();
-                $numberingDate = $data['numberingDate'];
-            }
-            $data['orderNumber'] = $this->accountingService->generateOrderNumber('sales_orders', $prefix, $digits, $numberingDate);
+        // Only generate order number if explicitly provided (e.g. Excel import)
+        // Pending orders created via UI will get their number on confirmation
+        if (!isset($data['numberingDate'])) {
+            $data['numberingDate'] = now()->toDateString();
         }
 
         $order = new SalesOrder();
@@ -69,7 +63,22 @@ class SalesOrderController extends Controller
     public function update(SalesOrderRequest $request, string $id)
     {
         $order = SalesOrder::findOrFail($id);
-        $order->fill($request->validated())->save();
+        $data = $request->validated();
+
+        // Generate order number when order is first confirmed and has no number yet
+        if (
+            !empty($data['status']) &&
+            $data['status'] === 'confirmed' &&
+            empty($order->orderNumber)
+        ) {
+            $settings = SiteSetting::whereIn('key', ['salesOrderPrefix', 'salesOrderDigits'])->pluck('value', 'key');
+            $prefix = $settings['salesOrderPrefix'] ?? 'SO';
+            $digits = (int) ($settings['salesOrderDigits'] ?? 4);
+            $numberingDate = $order->numberingDate?->toDateString() ?? now()->toDateString();
+            $data['orderNumber'] = $this->accountingService->generateOrderNumber('sales_orders', $prefix, $digits, $numberingDate);
+        }
+
+        $order->fill($data)->save();
 
         return response()->json($order->load('customer'));
     }
