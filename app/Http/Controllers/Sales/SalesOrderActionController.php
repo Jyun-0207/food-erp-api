@@ -31,7 +31,7 @@ class SalesOrderActionController extends Controller
         try {
             $result = DB::transaction(function () use ($id, $batchSelections, $userName) {
                 // 1. Verify order status
-                $order = SalesOrder::with('customer')->findOrFail($id);
+                $order = SalesOrder::with('customer')->lockForUpdate()->findOrFail($id);
 
                 if ($order->status !== 'confirmed' && $order->status !== 'processing') {
                     throw new \Exception("訂單狀態不正確，目前為 {$order->status}，需要 confirmed 或 processing");
@@ -405,7 +405,7 @@ class SalesOrderActionController extends Controller
         try {
             $result = DB::transaction(function () use ($id, $returnReason, $userName) {
                 // 1. Validate order
-                $order = SalesOrder::with('customer')->findOrFail($id);
+                $order = SalesOrder::with('customer')->lockForUpdate()->findOrFail($id);
 
                 if ($order->status !== 'shipped' && $order->status !== 'delivered') {
                     throw new \Exception("CONFLICT:訂單狀態不正確，目前為 {$order->status}，需要 shipped 或 delivered");
@@ -700,7 +700,7 @@ class SalesOrderActionController extends Controller
 
         try {
             $result = DB::transaction(function () use ($id, $userName) {
-                $order = SalesOrder::with('customer')->findOrFail($id);
+                $order = SalesOrder::with('customer')->lockForUpdate()->findOrFail($id);
 
                 $ar = AccountsReceivable::where('orderId', $id)->first();
                 if (!$ar) {
@@ -783,7 +783,7 @@ class SalesOrderActionController extends Controller
 
         try {
             $result = DB::transaction(function () use ($id, $request, $userName) {
-                $order = SalesOrder::findOrFail($id);
+                $order = SalesOrder::lockForUpdate()->findOrFail($id);
 
                 if ($order->paymentStatus === 'refunded') {
                     throw new \Exception('CONFLICT:此訂單已退款');

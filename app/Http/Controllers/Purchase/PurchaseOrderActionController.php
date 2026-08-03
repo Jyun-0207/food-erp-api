@@ -31,7 +31,7 @@ class PurchaseOrderActionController extends Controller
         try {
             $result = DB::transaction(function () use ($id, $batchEntries, $userName) {
                 // 1. Verify order status
-                $order = PurchaseOrder::with('supplier')->findOrFail($id);
+                $order = PurchaseOrder::with('supplier')->lockForUpdate()->findOrFail($id);
 
                 if ($order->status !== 'approved') {
                     throw new \Exception("採購單狀態不正確，目前為 {$order->status}，需要 approved");
@@ -233,7 +233,7 @@ class PurchaseOrderActionController extends Controller
 
         try {
             $result = DB::transaction(function () use ($id, $userName) {
-                $order = PurchaseOrder::with('supplier')->findOrFail($id);
+                $order = PurchaseOrder::with('supplier')->lockForUpdate()->findOrFail($id);
 
                 $ap = AccountsPayable::where('orderId', $id)->first();
                 if (!$ap) {
@@ -323,7 +323,7 @@ class PurchaseOrderActionController extends Controller
         try {
             $result = DB::transaction(function () use ($id, $returnReason, $userName) {
                 // 1. Validate order
-                $order = PurchaseOrder::with('supplier')->findOrFail($id);
+                $order = PurchaseOrder::with('supplier')->lockForUpdate()->findOrFail($id);
 
                 if ($order->status !== 'received') {
                     throw new \Exception("CONFLICT:採購單狀態不正確，目前為 {$order->status}，需要 received");
@@ -521,7 +521,7 @@ class PurchaseOrderActionController extends Controller
 
         try {
             $result = DB::transaction(function () use ($id, $request, $userName) {
-                $order = PurchaseOrder::findOrFail($id);
+                $order = PurchaseOrder::lockForUpdate()->findOrFail($id);
 
                 if ($order->refundReceived) {
                     throw new \Exception('CONFLICT:此採購單已收到退款');
