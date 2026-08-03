@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class CustomerRequest extends FormRequest
 {
@@ -14,9 +15,17 @@ class CustomerRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // 客戶編號 is unique across customers; on update the row being
+            // edited has to be excluded or it would collide with itself.
+            'code' => [
+                'nullable',
+                'max:50',
+                Rule::unique('customers', 'code')->ignore($this->route('customer')),
+            ],
             'name' => ['required', 'min:1', 'max:200'],
             'email' => ['nullable', 'email'],
             'phone' => ['nullable', 'max:20'],
+            'fax' => ['nullable', 'max:50'],
             'companyName' => ['nullable', 'max:200'],
             'taxId' => ['nullable', 'max:20'],
             'creditLimit' => ['nullable', 'numeric', 'min:0'],
@@ -29,6 +38,8 @@ class CustomerRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'code.unique' => '此客戶編號已被使用',
+            'code.max' => '客戶編號不能超過 50 個字元',
             'name.required' => '客戶名稱為必填欄位',
             'name.min' => '客戶名稱至少需要 1 個字元',
             'name.max' => '客戶名稱不能超過 200 個字元',
@@ -37,6 +48,7 @@ class CustomerRequest extends FormRequest
             'phone.required' => '電話為必填欄位',
             'phone.min' => '電話至少需要 1 個字元',
             'phone.max' => '電話不能超過 20 個字元',
+            'fax.max' => '傳真不能超過 50 個字元',
             'companyName.max' => '公司名稱不能超過 200 個字元',
             'taxId.max' => '統一編號不能超過 20 個字元',
             'creditLimit.numeric' => '信用額度必須為數字',

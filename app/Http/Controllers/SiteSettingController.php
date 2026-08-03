@@ -29,6 +29,8 @@ class SiteSettingController extends Controller
         'purchaseOrderPrefix', 'purchaseOrderDigits',
         'workOrderPrefix', 'workOrderDigits',
         'batchNumberDigits',
+        // 客戶編號 (請款單位 on 客戶應收對帳明細表)
+        'customerCodePrefix', 'customerCodeDigits',
         // Payment & delivery
         'paymentMethods', 'paymentMethodAccounts', 'deliveryMethods',
         // Shipping & inventory

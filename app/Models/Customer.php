@@ -16,9 +16,11 @@ class Customer extends BaseModel
     ];
 
     protected $fillable = [
+        'code',
         'name',
         'email',
         'phone',
+        'fax',
         'companyName',
         'taxId',
         'creditLimit',
