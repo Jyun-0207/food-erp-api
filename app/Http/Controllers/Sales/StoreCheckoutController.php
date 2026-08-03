@@ -7,6 +7,7 @@ use App\Http\Requests\StoreCheckoutRequest;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\SalesOrder;
+use App\Models\SiteSetting;
 use App\Services\AccountingService;
 use Illuminate\Support\Facades\DB;
 
@@ -59,7 +60,14 @@ class StoreCheckoutController extends Controller
                 $shipping = $data['shipping'];
                 $totalAmount = bcadd(bcadd($subtotal, (string) $tax, 2), (string) $shipping, 2);
 
-                $orderNumber = $this->accountingService->generateOrderNumber('sales_orders', 'SO');
+                // Same 流水號設定 as the admin path — a hardcoded 'SO' with the
+                // default digit count gave storefront orders a second format.
+                $settings = SiteSetting::whereIn('key', ['salesOrderPrefix', 'salesOrderDigits'])->pluck('value', 'key');
+                $orderNumber = $this->accountingService->generateOrderNumber(
+                    'sales_orders',
+                    $settings['salesOrderPrefix'] ?? 'SO%Y%m%d',
+                    (int) ($settings['salesOrderDigits'] ?? 4),
+                );
 
                 return SalesOrder::create([
                     'orderNumber' => $orderNumber,

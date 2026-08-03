@@ -31,22 +31,51 @@ class AccountingService
 
     /**
      * Generate order number for sales_orders or purchase_orders.
-     * Format: {prefix}{YYYYMMDD}{digits-digit seq}
+     * Format: {resolved prefix}{digits-digit seq}, e.g. SO2026072801.
+     *
+     * The prefix is a strftime-style template ('SO%Y%m%d'), which is what the
+     * 流水號設定 UI documents and stores. It used to be treated as a literal
+     * and have the date appended on top, producing SO%Y%m%d2026072801 — and
+     * the raw '%' also acted as a LIKE wildcard in the sequence lookup.
+     *
      * @param string|null $date  Date string (Y-m-d) to use for numbering; defaults to today.
      */
     public function generateOrderNumber(string $model, string $prefix, int $digits = 4, ?string $date = null): string
     {
         $carbon = $date ? \Carbon\Carbon::parse($date) : now();
-        $dateStr = $carbon->format('Ymd');
+
+        $base = $this->parseNumberTemplate($prefix, $carbon);
+        // A plain prefix with no date codes (e.g. the storefront's 'SO') still
+        // gets the date, so its numbers keep their existing shape.
+        if ($base === $prefix) {
+            $base .= $carbon->format('Ymd');
+        }
 
         $count = DB::table($model)
-            ->where('orderNumber', 'like', "{$prefix}{$dateStr}%")
+            ->where('orderNumber', 'like', $base . '%')
             ->lockForUpdate()
             ->count();
 
         $seq = str_pad((string) ($count + 1), $digits, '0', STR_PAD_LEFT);
 
-        return "{$prefix}{$dateStr}{$seq}";
+        return "{$base}{$seq}";
+    }
+
+    /**
+     * Resolve the %Y/%m/%d-style codes the frontend writes into number
+     * templates. Mirrors parseOrderNumberTemplate() in the Next app.
+     */
+    private function parseNumberTemplate(string $template, \Carbon\Carbon $d): string
+    {
+        return strtr($template, [
+            '%Y' => $d->format('Y'),
+            '%y' => $d->format('y'),
+            '%m' => $d->format('m'),
+            '%d' => $d->format('d'),
+            '%H' => $d->format('H'),
+            '%M' => $d->format('i'),
+            '%S' => $d->format('s'),
+        ]);
     }
 
     /**
